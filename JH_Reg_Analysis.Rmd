@@ -1,0 +1,167 @@
+---
+title: "Regression Analysis Project"
+author: "Brian Stewart"
+date: "8/12/2020"
+output: pdf_document
+
+---
+
+# Overview  
+
+You work for Motor Trend, a magazine about the automobile industry. Looking at a data set of a collection of cars, they are interested in exploring the relationship between a set of variables and miles per gallon (MPG) (outcome).  
+
+They are particularly interested in the following two questions:  
+
+* “Is an automatic or manual transmission better for MPG”
+* "Quantify the MPG difference between automatic and manual transmissions"
+
+# Executive Summary  
+What I plan to figure out during the following analysis is whether or not the type of transmission of a car has an affect on gas mileage or miles per gallon (MPG). Linear regression and multivariate regression will be used to test the effectiveness of tranmission type, but also rule out other factors of a car i.e. cylinder type, horsepower, engine type, etc. With this knowledge we at Motor Trend magazine can better help our readers understand specific factors that might factor into their next car purchase.  
+
+# Hypothesis  
+
+## Null Hypothesis  
+Transmission type will have no affect on the MPG rate of a car.  
+
+## Alternative Hypotheses  
+* Automatic cars will have a better MPG rate than that of manaul cars.
+* Tranmission type will be more correlated with MPG than any other variable in the data set.  
+
+# Methodology/Code   
+First the libraries and data need to be loaded in.  
+```{r, message=F}
+library(ggplot2)
+library(stats)
+library(GGally)
+library(regclass)
+library(MASS)
+data(mtcars)
+```
+The data is a data frame of 32 observations of 11 variables.  
+
+```{r}
+dim(mtcars)
+```
+
+The summary of each variable.  
+
+```{r}
+summary(mtcars)
+```
+
+Now let's look at the variables we most want to look at. The following box plot shows that manual transmission has a higher MPG rate than that of automatic transmission which rejects our hypothesis and the null, but we need to dig further to make sure that this is correct. It also answers the first question posed by the project.   
+
+```{r, fig.height=5, fig.width=5}
+ggplot(mtcars, aes(x=factor(am, labels = c('Automatic', 'Manual')), y=mpg, fill = factor(am))) +
+        geom_boxplot() + xlab('Transmission Type') + ylab('Miles Per Gallon (MPG)')
+```
+
+The following plots give us a general idea of the correlation and effects of each varaible against the others.  
+```{r, message=F, fig.height=8, fig.width=12}
+ggpairs(mtcars, columns = 1:ncol(mtcars), lower = list(continuous = "smooth", colour = "blue"),
+        upper = list(corSize = 15), 
+        diag = list(continuous = "barDiag", colour = "blue"))
+```
+
+There are two variables in the data set that should be factored out. "am" and "vs" are both binary variables (having values of either 0 or 1) so we can split them into what the 0 or 1 represents. For "am we split into automatic and manual transmission, and for "vs" v shape and straight shape.  
+
+```{r}
+mtcars$transmission <- factor(mtcars$am, labels = c('automatic', 'manual'))
+mtcars$engine <- factor(mtcars$vs, labels = c('v', 'stright'))
+```
+
+The next runs a T-test on the newly created transmission variable and its affect on MPG. The P-value is <.05 allowing us to reject the null hypothesis that transmission type would have no affect on MPG rate.  
+
+```{r}
+t.test(mpg ~ transmission, data = mtcars, var.equal = F, conf.level = .95)
+```
+
+Now we can check the regression statistic for transmission on MPG as well.  
+
+```{r}
+summary(lm(mpg ~ transmission, data = mtcars))$coef
+```
+
+According to the model, specifically the P-value, tranmission type is a significant indicator for MPG rate. This may not be the only contributing factor though. We need to figure out if any other of the variables of the data set are equally or more significant than the one we are testing.  
+
+```{r}
+model <- lm(mpg ~ transmission+disp+hp+drat+wt+qsec+engine+cyl+gear+carb, data = mtcars)
+summary(model)$coef
+```
+
+```{r}
+summary(model)$r.squared
+```
+
+The regression model supports the transmission hypothesis as well with an ~87% accuracy rate. There is a lot of noise though with nine other variables so we need to figure out which ones have the most effect, negative or positive. This is where the variation inflation factors (VIF) test comes into play.  
+
+```{r}
+VIF(model)
+```
+
+Any variable over 10 is considered to be large so we can ignore all but one of those values to exclude colinearity issues. We still need to sort out which variables to keep though, for that we will use a stepwise method.  
+
+```{r}
+step <- stepAIC(model, direction = "both", trace = FALSE)
+summary(step)$coef
+```
+
+```{r}
+summary(step)$r.squared
+```
+
+With an ~85% accuracy the three variables that make the best model are transmission type, weight, and quarter mile time. We can also assess the accuracy of this with the following anova regression models.
+
+```{r}
+fit1 <- lm(mpg ~ factor(am), data = mtcars)
+fit2 <- lm(mpg ~ factor(am) + wt, data = mtcars)
+fit3 <- lm(mpg ~ factor(am) + wt + qsec, data = mtcars)
+anova(fit1, fit2, fit3)
+```
+
+
+```{r}
+fit4 <- lm(mpg ~ factor(am) + wt + qsec + hp, data = mtcars)
+fit5 <- lm(mpg ~ factor(am) + wt + qsec + hp + drat, data = mtcars)
+anova(fit1, fit2, fit3, fit4, fit5)
+```
+
+The anova stats from these two tests show that the three main variables are significant and any excess variables are not (shown by fit4 and fit5).  
+
+# Results
+
+## Final Model
+
+That brings us to our final model and final analysis of the data.  
+
+```{r}
+final_model <- lm(mpg ~ wt + transmission + qsec, data = mtcars)
+summary(final_model)$coef
+```
+
+So, on average, the manual transmission cars have 2.94 MPGs more than automatic transmission cars which reject both the null and alternative hypothesis but does support that transmission does play a pivotal role in MPG. The following are supportive plots that take a look at the residuals of the model further supporting the analysis made in this project.  
+
+```{r, fig.height=10, fig.width=8}
+par(mfrow=c(2,1))
+plot(final_model$residuals ~ mtcars$wt + mtcars$qsec, main = "Linearity Condition")
+```
+
+
+
+
+```{r}
+qqnorm(final_model$residuals)
+qqline(final_model$residuals)
+```
+
+
+
+
+
+
+
+
+
+
+
+
